@@ -1,2 +1,7 @@
 * text eol=lf
 *.png binary
+
+# iCloud Downloader GUI
+*.ico binary
+*.png binary
+*.icns binary

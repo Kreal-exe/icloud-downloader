@@ -616,6 +616,32 @@ class DownloadResult(NamedTuple):
 NOT_DOWNLOADED = DownloadResult(downloaded=False, present=False)
 
 
+SIZE_IGNORED_EXTENSIONS: set[str] = set()
+"""
+Extensions (".mov", ".mp4"…) whose existing files count as downloaded by name alone, whatever their size: videos
+shrunk after downloading (e.g. by Photo Organizer) under the same name are not downloaded again next to them.
+Set by the iCloud Downloader GUI; empty (icloudpd's own behaviour) otherwise.
+"""
+
+
+def size_ignored(path: str) -> bool:
+    return os.path.splitext(path)[1].lower() in SIZE_IGNORED_EXTENSIONS
+
+
+def compressed_twin(path: str) -> str | None:
+    """
+    A video of another container (AVI, MKV…) compressed into an MP4 of the same name (as Photo Organizer does):
+    that .mp4 stands for it. Only while videos are matched by name.
+    """
+    stem, extension = os.path.splitext(path)
+    if not size_ignored(path) or extension.lower() in (".mp4", ".m4v", ".mov"):
+        return None
+    for candidate in (stem + ".mp4", stem + ".MP4"):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def download_builder(
     logger: logging.Logger,
     folder_structure: str,
@@ -761,8 +787,15 @@ def download_builder(
             original_download_path = add_suffix_to_filename("-original", download_path)
             file_exists = os.path.isfile(original_download_path)
 
+        if not file_exists and (twin := compressed_twin(download_path)):
+            download_path = twin
+            original_download_path = None
+            file_exists = True
+
         if file_exists:
-            if file_match_policy == FileMatchPolicy.NAME_SIZE_DEDUP_WITH_SUFFIX:
+            if file_match_policy == FileMatchPolicy.NAME_SIZE_DEDUP_WITH_SUFFIX and not size_ignored(
+                original_download_path or download_path
+            ):
                 # for later: this crashes if download-size medium is specified
                 file_size = os.stat(original_download_path or download_path).st_size
                 photo_size = version.size
@@ -901,7 +934,9 @@ def download_builder(
                         print(lp_download_path)
             else:
                 if lp_file_exists:
-                    if file_match_policy == FileMatchPolicy.NAME_SIZE_DEDUP_WITH_SUFFIX:
+                    if file_match_policy == FileMatchPolicy.NAME_SIZE_DEDUP_WITH_SUFFIX and not size_ignored(
+                        lp_download_path
+                    ):
                         lp_file_size = os.stat(lp_download_path).st_size
                         lp_photo_size = version.size
                         if lp_file_size != lp_photo_size:

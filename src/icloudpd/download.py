@@ -26,6 +26,25 @@ from pyicloud_ipd.services.photos import PhotoAsset
 from pyicloud_ipd.version_size import VersionSize
 
 
+class ProgressHooks:
+    """Byte-level progress of downloads, for the iCloud Downloader GUI (no-ops for the CLI)."""
+
+    def start(self, download_path: str, total_size: int, done_size: int) -> None:
+        pass
+
+    def chunk(self, download_path: str, size: int) -> None:
+        pass
+
+    def end(self, download_path: str) -> None:
+        pass
+
+
+HOOKS = ProgressHooks()
+
+# Bigger reads than the original 1 KiB: far fewer Python iterations on multi-GB videos.
+CHUNK_SIZE = 256 * 1024
+
+
 def update_mtime(created: datetime.datetime, download_path: str) -> None:
     """Set the modification time of the downloaded file to the photo creation date"""
     if created:
@@ -44,8 +63,12 @@ def set_utime(download_path: str, created_date: datetime.datetime) -> None:
     """Set date & time of the file"""
     try:
         ctime = time.mktime(created_date.timetuple())
-    except OverflowError:
-        ctime = time.mktime(datetime.datetime(1970, 1, 1, 0, 0, 0).timetuple())
+    except (OverflowError, OSError, ValueError):
+        ctime = 0.0
+    # Windows refuses file times before 1970 (OSError 22): such dates (e.g. 1960 written by an editing app) leave the
+    # file at the earliest time it accepts instead of failing the download.
+    if os.name == "nt" and ctime < 86400:
+        ctime = 86400.0
     os.utime(download_path, (ctime, ctime))
 
 
@@ -94,9 +117,10 @@ def download_response_to_path(
     Returns False when the response held only part of the file: the partial file is kept,
     so the rest can be requested from where it stopped."""
     with open(temp_download_path, ("ab" if append_mode else "wb")) as file_obj:
-        for chunk in response.iter_content(chunk_size=1024):
+        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
             if chunk:
                 file_obj.write(chunk)
+                HOOKS.chunk(download_path, len(chunk))
     total_size = content_range_total(response)
     if total_size is not None and os.path.getsize(temp_download_path) < total_size:
         return False
@@ -146,11 +170,33 @@ def download_media(
         partial(download_response_to_path_dry_run, logger) if dry_run else download_response_to_path
     )
 
+    try:
+        return _download_media_loop(
+            logger, icloud, photo, download_path, version, size, filename_builder,
+            temp_download_path, download_local,
+        )
+    finally:
+        HOOKS.end(download_path)
+
+
+def _download_media_loop(
+    logger: logging.Logger,
+    icloud: PyiCloudService,
+    photo: PhotoAsset,
+    download_path: str,
+    version: AssetVersion,
+    size: VersionSize,
+    filename_builder: Callable[[PhotoAsset], str],
+    temp_download_path: str,
+    download_local: Callable[..., bool],
+) -> bool:
     retries = 0
+    last_error: Exception | None = None
     while True:
         try:
             append_mode = os.path.exists(temp_download_path)
             current_size = os.path.getsize(temp_download_path) if append_mode else 0
+            HOOKS.start(download_path, version.size, current_size)
             if append_mode:
                 logger.debug(f"Resuming downloading of {download_path} from {current_size}")
 
@@ -214,6 +260,7 @@ def download_media(
 
                 icloud.authenticate()
             else:
+                last_error = ex
                 # short circuiting 0 retries
                 if retries == constants.MAX_RETRIES:
                     break
@@ -260,12 +307,14 @@ def download_media(
         retries = retries + 1
         if retries >= constants.MAX_RETRIES:
             break
-    if retries >= constants.MAX_RETRIES:
-        # Get the proper filename for error messages
+    if retries >= constants.MAX_RETRIES and last_error is not None:
+        # The reason iCloud gave (throttling, a server error…): without it the log only says "try again later".
+        # Other failures above have already logged their own reason.
         error_filename = filename_builder(photo)
         logger.error(
-            "Could not download %s. Please try again later.",
+            "Could not download %s (%s). Please try again later.",
             error_filename,
+            last_error,
         )
 
     return False

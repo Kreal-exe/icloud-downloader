@@ -1,93 +1,118 @@
-# !!!! [Looking for MAINTAINER for this project](https://github.com/icloud-photos-downloader/icloud_photos_downloader/issues/1305) !!!!
+<p align="center">
+  <img src="app/Assets/icon.png" width="96" alt="">
+</p>
 
-# iCloud Photos Downloader [![Quality Checks](https://github.com/icloud-photos-downloader/icloud_photos_downloader/workflows/Quality%20Checks/badge.svg)](https://github.com/icloud-photos-downloader/icloud_photos_downloader/actions/workflows/quality-checks.yml) [![Build and Package](https://github.com/icloud-photos-downloader/icloud_photos_downloader/workflows/Produce%20Artifacts/badge.svg)](https://github.com/icloud-photos-downloader/icloud_photos_downloader/actions/workflows/produce-artifacts.yml) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<h1 align="center">iCloud Downloader</h1>
 
-- A command-line tool to download all your iCloud photos.
-- Works on Linux, Windows, and macOS; laptop, desktop, and NAS
-- Available as an executable for direct downloading and through package managers/ecosystems ([Docker](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#docker), [PyPI](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#pypi), [AUR](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#aur), [npm](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#npm))
-- Developed and maintained by volunteers (we are always looking for [help](CONTRIBUTING.md)). 
+<p align="center">
+  Download your whole iCloud Photos library to a folder — and see exactly what is happening.<br>
+  Sign in once · resumes where it stopped · parallel downloads · Windows and macOS
+</p>
 
-See [Documentation](https://icloud-photos-downloader.github.io/icloud_photos_downloader/) for more details. Also, check [Issues](https://github.com/icloud-photos-downloader/icloud_photos_downloader/issues)
+<p align="center">
+  <a href="../../releases/latest"><b>Download for Windows and macOS</b></a>
+</p>
 
-## iCloud Prerequisites
+![iCloud Downloader downloading a library](docs/screenshots/main-light.png)
 
-To make iCloud Photo Downloader work, ensure the iCloud account is configured with the following settings, otherwise Apple Servers will return an ACCESS_DENIED error:
+## Why
 
-- **Enable Access iCloud Data on the Web:** On your iPhone / iPad, enable `Settings > Apple ID > iCloud > Access iCloud Data on the Web`
-- **Advanced Data Protection (ADP):** either disable `Settings > Apple ID > iCloud > Advanced Data Protection` on your iPhone / iPad, or keep it enabled and run with `--adp-web-access` (see [Authentication](https://icloud-photos-downloader.github.io/icloud_photos_downloader/authentication.html#adp))
-
-
-## Install and Run
-
-There are three ways to run `icloudpd`:
-1. Download executable for your platform from the GitHub [Release](https://github.com/icloud-photos-downloader/icloud_photos_downloader/releases/tag/v1.33.1) and run it
-1. Use package manager to install, update, and, in some cases, run ([Docker](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#docker), [PyPI](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#pypi), [AUR](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#aur), [npm](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html#npm))
-1. Build and run from the source
-
-See [Documentation](https://icloud-photos-downloader.github.io/icloud_photos_downloader/install.html) for more details
+Downloading tens of thousands of photos from iCloud with command-line tools tends to go wrong quietly: the run sits
+for hours on a hidden password prompt, a dropped connection stalls it, and you can't tell what is done and what is
+not. iCloud Downloader is a desktop app built on [icloudpd](https://github.com/icloud-photos-downloader/icloud_photos_downloader)
+that fixes exactly that.
 
 ## Features
 
-<!-- start features -->
+- **Sign in once.** Apple ID, password and the 6-digit code from your iPhone in one dialog. The session is saved
+  (the password too, if you tick *Remember*, in Windows Credential Manager or the macOS Keychain), so next time
+  there is nothing to type. *Sign out* removes both.
+- **Never downloads a file twice.** Files already in the folder are recognised by the same names and
+  `YYYY/MM/DD` folders icloudpd uses — a folder filled by icloudpd is picked up as it is. Half-downloaded files
+  (`*.part`) continue from where they stopped.
+- **Fast.** 1–16 parallel downloads, changeable while downloading. The library is listed 12 pages at a time,
+  so checking an already-downloaded library of 45 000 photos takes a few minutes instead of 20.
+- **Doesn't give up.** A file that fails is retried right away (after 5, 15 and 30 s), then again in rounds
+  with growing pauses until it is downloaded. Network errors restart the run automatically; a watchdog restarts
+  a run that makes no progress for 4 minutes. Photos iCloud has no original of are reported, not retried forever.
+- **Backs off when Apple throttles.** When iCloud starts refusing, downloading pauses for 15 s and uses one
+  parallel download less — again after every burst of refusals, until iCloud is happy. After 5 quiet minutes the
+  speed comes back by itself.
+- **Hidden photos too, if you want.** The *Hidden* album isn't part of *All Photos*; with *Download hidden photos*
+  it goes into its own `Hidden` folder inside the download folder.
+- **Fixes broken dates.** Some apps write nonsense creation dates — a 2026 video dated 1960 (Unix time where MP4
+  counts from 1904), a saved image dated 1 January 1980 (the ZIP/FAT zero date). They are repaired, or replaced by
+  the date the file was added to iCloud; files already downloaded under the wrong date are moved to the right one.
+- **Leaves your compressed videos alone.** Shrunk your videos afterwards (e.g. with Photo Organizer) under the
+  same names? With *Don't re-download compressed videos* (on by default) they still count as downloaded.
+- **Shows what is going on.** Totals, files already there, downloaded now, left to check, errors, speed and time
+  left; every file in flight with its own progress bar; a log with errors in plain words, an *errors only*
+  filter and *Copy*.
+- English and Russian, light and dark theme; keeps the computer awake while downloading.
 
-- Three modes of operation:
-  - **Copy** - download new photos from iCloud (default mode)
-  - **Sync** - download new photos from iCloud and delete local files that were removed in iCloud (`--auto-delete` option)
-  - **Move** - download new photos from iCloud and delete photos in iCloud (`--keep-icloud-recent-days` option)
-- Support for Live Photos (image and video as separate files) and RAW images (including RAW+JPEG)
-- Automatic de-duplication of photos with the same name
-- One time download and an option to monitor for iCloud changes continuously (`--watch-with-interval` option)
-- Optimizations for incremental runs (`--until-found` and `--recent` options)
-- Photo metadata (EXIF) updates (`--set-exif-datetime` option)
-- ... and many more (use `--help` option to get full list)
+### Dark theme
 
-<!-- end features -->
+![Dark theme](docs/screenshots/main-dark.png)
 
-## Experimental Mode
+### Signing in
 
-Some changes are added to the experimental mode before they graduate into the main package. [Details](EXPERIMENTAL.md)
+![Signing in to iCloud](docs/screenshots/sign-in.png)
 
-## Usage
+### Settings
 
-To keep your iCloud photo collection synchronized to your local system:
+![Settings](docs/screenshots/settings.png)
 
-```
-icloudpd --directory /data --username my@email.address --watch-with-interval 3600
-```
+## How many parallel downloads?
 
-> [!IMPORTANT]
-> It is `icloudpd`, not `icloud` executable
+Each connection to iCloud gives roughly 3–8 MB/s, so more parallel downloads are faster until your internet
+connection is the limit. 6–8 is usually best; above 10–12 Apple starts throttling. Change it while downloading
+and watch the speed.
 
-> [!TIP]
-> Synchronization logic can be adjusted with command-line parameters. Run `icloudpd --help` to get full list.
+## Download
 
-To move tracked local copies out of the active mirror when photos leave a shared library (including moves
-back to a participant's personal library), use a dedicated download directory:
+Get the latest version from [Releases](../../releases/latest) — nothing else to install:
 
-```bash
-icloudpd --directory /data/shared --username my@email.address \
-  --library 'SharedSync-YOUR-LIBRARY-ID' --prune-orphans
-```
+| | File | How to run |
+|---|---|---|
+| **Windows 10/11** (x64) | `iCloudDownloader-Windows-x64.zip` | Unzip, run `iCloudDownloader.exe` (keep the `engine` folder next to it). |
+| **macOS 12+** (Apple Silicon) | `iCloudDownloader-macOS-arm64.zip` | Unzip, move to Applications. Not notarized: the first time, right-click → Open. |
 
-By default, tracking starts with newly written files and the first successful run
-only establishes a baseline. To also clean old orphans in an existing dedicated
-flat, original-size mirror, explicitly opt in to the one-time
-`--prune-orphans-adopt-existing` bootstrap and preview it with `--dry-run` first.
+Releases are built by GitHub Actions ([`app-release.yml`](.github/workflows/app-release.yml)) from a tag `app-vX.Y.Z`.
 
-Pruned files are moved into `.icloudpd-pruned/`, never permanently deleted: even
-consistent counts cannot prove Apple's listing is complete. Exclude that folder
-from gallery scans. Pruning problems warn without failing downloads. See
-[the option reference](docs/reference.md#prune-orphans-parameter) for ownership
-requirements, hashing costs and recovery instructions.
+## Build from source
 
-To independently create and authorize a session (and complete 2SA/2FA validation if needed) on your local system:
+| | You need | Run | You get |
+|---|---|---|---|
+| **Windows** | [Python 3.10+](https://python.org), [.NET 10 SDK](https://dot.net) | `.\build.ps1` | `iCloudDownloader.exe` on the Desktop, opened |
+| **macOS** | `python3`, [.NET 10 SDK](https://dot.net) | `./build-mac.sh` | `/Applications/iCloudDownloader.app`, opened |
 
-```
-icloudpd --username my@email.address --auth-only
-```
-> [!TIP]
-> This feature can also be used to check and verify that the session is still authenticated. 
+`.\build.ps1 -Zip` also writes the release zip to `dist\`, `./build-mac.sh --dmg` a release dmg;
+`INSTALL_DIR` installs somewhere else.
 
-## Contributing
+`iCloudDownloader --start` begins downloading as soon as the window opens (for a shortcut or a scheduled task).
 
-Want to contribute to iCloud Photos Downloader? Awesome! Check out the [contributing guidelines](CONTRIBUTING.md) to get involved.
+### Before the first run
+
+iCloud must allow web access to your photos: on your iPhone, turn on
+*Settings → [your name] → iCloud → Access iCloud Data on the Web*. With *Advanced Data Protection* on, this
+setting is required.
+
+## How it works
+
+| Part | Where | What it does |
+|---|---|---|
+| Window | [`app/`](app) | Avalonia (.NET) app for Windows and macOS. |
+| Engine | [`src/icdl_engine.py`](src/icdl_engine.py) | Signs in, lists the library in parallel, downloads with retries. Talks to the window with JSON lines: events on stdout, answers and commands such as `{"workers": 8}` on stdin. Uses icloudpd's own `download_builder`, so file names and folders match icloudpd. |
+| icloudpd changes | [`session.py`](src/pyicloud_ipd/session.py), [`download.py`](src/icloudpd/download.py), [`base.py`](src/icloudpd/base.py) | Session and cookie files written under a lock (shared by threads); byte-level progress; 256 KiB reads; the reason iCloud gave is logged; optional match of videos by name alone. |
+
+Settings, the saved session and logs live in `%APPDATA%\iCloudDownloader` (Windows) or
+`~/Library/Application Support/iCloudDownloader` (macOS).
+
+## icloudpd
+
+This repository is a fork of [icloudpd](https://github.com/icloud-photos-downloader/icloud_photos_downloader);
+the command-line tool is still here and works as before — see [README-icloudpd.md](README-icloudpd.md).
+
+## License
+
+MIT, like icloudpd — see [LICENSE.md](LICENSE.md).

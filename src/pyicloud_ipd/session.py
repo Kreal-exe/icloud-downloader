@@ -1,6 +1,8 @@
 import inspect
 import json
 import logging
+import os
+import threading
 import typing
 from typing import Any, Callable, Dict, Mapping, NoReturn, Sequence
 
@@ -16,6 +18,8 @@ from pyicloud_ipd.exceptions import (
 from pyicloud_ipd.utils import handle_connection_error, throw_on_503
 
 LOGGER = logging.getLogger(__name__)
+
+_SAVE_LOCK = threading.Lock()
 
 HEADER_DATA = {
     "X-Apple-ID-Account-Country": "account_country",
@@ -88,14 +92,23 @@ class PyiCloudSession(Session):
                 session_arg = value
                 self.service.session_data.update({session_arg: response.headers.get(header)})
 
-        # Save session_data to file
-        with open(self.service.session_path, "w", encoding="utf-8") as outfile:
-            json.dump(self.service.session_data, outfile)
+        # Save session_data and cookies to file. Several download threads share this session
+        # (iCloud Downloader GUI fork), so the writes are serialised to keep the files whole.
+        # Each file is written to a temporary name and swapped in at once: a process killed mid-write (or a power
+        # cut) leaves the previous session whole instead of a truncated one, which would mean signing in again.
+        with _SAVE_LOCK:
+            session_path = self.service.session_path
+            with open(session_path + ".tmp", "w", encoding="utf-8") as outfile:
+                json.dump(self.service.session_data, outfile)
+                outfile.flush()
+                os.fsync(outfile.fileno())
+            os.replace(session_path + ".tmp", session_path)
             LOGGER.debug("Saved session data to file")
 
-        # Save cookies to file
-        self.cookies.save(ignore_discard=True, ignore_expires=True)  # type: ignore[attr-defined]
-        LOGGER.debug("Cookies saved to %s", self.service.cookiejar_path)
+            cookiejar_path = self.service.cookiejar_path
+            self.cookies.save(cookiejar_path + ".tmp", ignore_discard=True, ignore_expires=True)  # type: ignore[attr-defined]
+            os.replace(cookiejar_path + ".tmp", cookiejar_path)
+            LOGGER.debug("Cookies saved to %s", cookiejar_path)
 
         if not response.ok and (
             content_type not in json_mimetypes or response.status_code in [421, 450, 500]

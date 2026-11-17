@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    iCloud Downloader: a window over the icloudpd fork's download engine (../src/icdl_engine.py).
+    One Avalonia app for Windows and macOS; build.ps1 makes the Windows exe, build-mac.sh the macOS .app.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>iCloudDownloader</AssemblyName>
+    <RootNamespace>iCloudDownloader</RootNamespace>
+    <Product>iCloud Downloader</Product>
+    <Version>1.0.0</Version>
+    <Description>Downloads the whole iCloud Photos library, resumes where it stopped, and says plainly what is happening.</Description>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+    <!-- Where the engine is, for an exe started from anywhere on the machine it was built on. -->
+    <AssemblyMetadata Include="RepoRoot" Value="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..'))" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+    <PackageReference Include="Material.Icons.Avalonia" Version="2.4.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,19 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="iCloudDownloader.App"
+             Name="iCloud Downloader"
+             RequestedThemeVariant="Default">
+    <Application.Styles>
+        <FluentTheme />
+        <mi:MaterialIconStyles />
+        <StyleInclude Source="avares://iCloudDownloader/Themes/Styles.axaml" />
+    </Application.Styles>
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://iCloudDownloader/Themes/Palette.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

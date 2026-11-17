@@ -5,7 +5,7 @@ import logging
 import re
 import time
 import typing
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Generator, Sequence, Tuple, cast
 from urllib.parse import urlencode
 
@@ -117,6 +117,21 @@ INDEXING_STATE_RETRY_DELAY_SECONDS = 4
 
 # albumType of a folder in the album list; albums are 0
 FOLDER_ALBUM_TYPE = 3
+
+
+# Seconds between the MP4/QuickTime epoch (1904-01-01) and the Unix epoch (1970-01-01).
+MP4_EPOCH_OFFSET = 2082844800
+# 1 January 1980 (the ZIP/FAT zero date) in milliseconds, with a day either side for time zones.
+DOS_EPOCH_START = 315446400000  # 1979-12-31 00:00 UTC
+DOS_EPOCH_END = 315619200000  # 1980-01-02 00:00 UTC
+
+
+def _utc_from_millis(millis: float) -> datetime:
+    """
+    A UTC datetime from milliseconds since 1970. Unlike datetime.fromtimestamp it accepts dates before 1970, which
+    Windows refuses with OSError 22 (some editing apps write such dates into videos, e.g. 1960 for a 2026 clip).
+    """
+    return datetime(1970, 1, 1, tzinfo=pytz.utc) + timedelta(milliseconds=millis)
 
 
 def download_asset(session: Session, url: str, start: int = 0) -> Response:
@@ -932,24 +947,47 @@ class PhotoAsset:
         return typing.cast(int, self._master_record["fields"]["resOriginalRes"]["value"]["size"])
 
     @property
-    def created(self) -> datetime:
+    def has_bogus_asset_date(self) -> bool:
+        """
+        The creation date is one no camera or phone writes: before 1970 (editing apps sometimes do, a 2026 clip dated
+        1960), or 1 January 1980, the zero date of ZIP and FAT that apps stamp on files saved without a date of their
+        own. Such a photo is dated another way (see repaired_date).
+        """
         try:
-            created_date = self.asset_date.astimezone(get_localzone())
+            value = self._asset_record["fields"]["assetDate"]["value"]
+            return "addedDate" in self._asset_record["fields"] and (value < 0 or DOS_EPOCH_START <= value < DOS_EPOCH_END)
+        except (KeyError, TypeError):
+            return False
+
+    @property
+    def repaired_date(self) -> datetime:
+        """
+        The date to use for a bogus (pre-1970) creation date. Some video editors write Unix time where MP4 counts
+        from 1904, which puts a clip exactly 66 years early (2026 → 1960): moved back, the date is the real one.
+        Anything else falls back to when the file was added to iCloud.
+        """
+        if self._asset_record["fields"]["assetDate"]["value"] < 0:
+            moved = self.asset_date + timedelta(seconds=MP4_EPOCH_OFFSET)
+            if datetime(2000, 1, 1, tzinfo=pytz.utc) <= moved <= datetime.now(pytz.utc) + timedelta(days=1):
+                return moved
+        return self.added_date
+
+    @property
+    def created(self) -> datetime:
+        date = self.repaired_date if self.has_bogus_asset_date else self.asset_date
+        try:
+            created_date = date.astimezone(get_localzone())
         except (ValueError, OSError):
-            logger.error(
-                "Could not convert photo created date to local timezone (%s)", self.asset_date
-            )
-            created_date = self.asset_date
+            logger.error("Could not convert photo created date to local timezone (%s)", date)
+            created_date = date
 
         return created_date
 
     @property
     def asset_date(self) -> datetime:
         try:
-            dt = datetime.fromtimestamp(
-                self._asset_record["fields"]["assetDate"]["value"] / 1000.0, tz=pytz.utc
-            )
-        except (KeyError, TypeError, ValueError):
+            dt = _utc_from_millis(self._asset_record["fields"]["assetDate"]["value"])
+        except (KeyError, TypeError, ValueError, OverflowError):
             dt = datetime.fromtimestamp(0)
         return dt
 
@@ -964,9 +1002,7 @@ class PhotoAsset:
 
     @property
     def added_date(self) -> datetime:
-        dt = datetime.fromtimestamp(
-            self._asset_record["fields"]["addedDate"]["value"] / 1000.0, tz=pytz.utc
-        )
+        dt = _utc_from_millis(self._asset_record["fields"]["addedDate"]["value"])
         return dt
 
     @property
